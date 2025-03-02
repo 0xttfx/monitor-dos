@@ -5,6 +5,8 @@ Esse script implementa uma abordagem híbrida para detectar um ataque DDoS e ope
 - E existindo um pico suspeito, analisa os logs do nftables para identificar IPs com alta frequência.
 - Para então atualizar o mapa eBPF (fixado em um caminho configurável) para bloquear os IPs surpeitos.
 
+---
+
 - Go Horse
   - garanta a pemissão de execução
   ```bash
