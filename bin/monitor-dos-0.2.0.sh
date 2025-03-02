@@ -7,11 +7,24 @@
 #
 # OBSERVAÇÕES TÉCNICAS:
 # - Certifique-se de que o módulo nf_conntrack esteja carregado e que o arquivo /proc/net/nf_conntrack exista.
-# - O log do nftables deve estar configurado corretamente; muitas vezes o kernel envia esses logs para syslog,
-#   então pode ser necessário ajustar o caminho.
-# - O script deve ser executado com privilégios de root para acesso aos arquivos e atualização do mapa eBPF via bpftool.
-# - O programa XDP e o mapa eBPF devem estar previamente carregados na interface de rede.
+# - O log do nftables deve estar configurado corretamente; em alguns sistemas os logs são enviados ao syslog,
+#   então ajuste o caminho (LOG_FILE) conforme necessário.
+# - O script deve ser executado com privilégios de root para acessar /proc, os logs e atualizar o mapa eBPF via bpftool.
+# - O programa XDP e o mapa eBPF (definido com o nome "blocked_ips") devem estar previamente carregados na interface.
 #
+# USO:
+#   sudo $(basename "$0") [opções]
+#
+# OPÇÕES:
+#   -m MAP_PIN         Caminho do mapa eBPF pinado (padrão: /sys/fs/bpf/blocked_ips)
+#   -c THRESHOLD_CONN  Número de conexões para acionar análise (padrão: 2000)
+#   -l LOG_THRESHOLD   Número mínimo de ocorrências de um IP nos logs para bloqueá-lo (padrão: 5)
+#   -i INTERVAL        Intervalo de tempo para verificação em segundos (padrão: 10)
+#   -f LOG_FILE        Caminho para o arquivo de log do nftables (padrão: /var/log/nftables.log)
+#   -h                 Exibe esta mensagem de ajuda e sai
+#
+# EXEMPLO:
+#   sudo $(basename "$0") -m /sys/fs/bpf/blocked_ips -c 1500 -l 10 -i 15 -f /var/log/nftables.log
 
 # Valores padrões
 MAP_PIN_DEFAULT="/sys/fs/bpf/blocked_ips"
@@ -73,6 +86,35 @@ echo "  INTERVAL:        $INTERVAL"
 echo "  LOG_FILE:        $LOG_FILE"
 echo
 
+# Função para pinagem automática do mapa eBPF se ainda não estiver pinado.
+auto_pin_map() {
+    if [ ! -e "$MAP_PIN" ]; then
+        echo "O mapa eBPF não está pinado em $MAP_PIN. Tentando pinar automaticamente..."
+        # Procura o mapa "blocked_ips" usando bpftool.
+        # O comando bpftool map show normalmente lista linhas como:
+        # "1: map 0 pinned /sys/fs/bpf/blocked_ips  ... blocked_ips"
+        # Aqui, usamos grep para encontrar a linha que contenha "blocked_ips"
+        map_id=$(bpftool map show 2>/dev/null | grep -m1 "blocked_ips" | awk '{print $1}' | tr -d ':')
+        if [ -n "$map_id" ]; then
+            bpftool map pin id "$map_id" "$MAP_PIN"
+            if [ $? -eq 0 ]; then
+                echo "Mapa 'blocked_ips' (ID: $map_id) pinado com sucesso em $MAP_PIN."
+            else
+                echo "Erro ao piná-lo. Verifique as permissões e a existência do mapa."
+                exit 1
+            fi
+        else
+            echo "Erro: não foi possível encontrar o mapa 'blocked_ips'."
+            exit 1
+        fi
+    else
+        echo "Mapa eBPF já está pinado em $MAP_PIN."
+    fi
+}
+
+# Executa a pinagem automática do mapa
+auto_pin_map
+
 # Função: Converte um IP (formato x.x.x.x) para valor hexadecimal (big-endian)
 ip_to_hex() {
     local ip="$1"
@@ -97,32 +139,6 @@ get_conn_count() {
         echo "0"
     fi
 }
-
-## Loop principal de monitoramento
-#while true; do
-#    conn_count=$(get_conn_count)
-#    echo "Conexões atuais: $conn_count"
-#
-#    if [ "$conn_count" -gt "$THRESHOLD_CONN" ]; then
-#        echo "Alerta: Pico de conexões detectado ($conn_count > $THRESHOLD_CONN)."
-#        echo "Analisando os logs do nftables para identificar IPs suspeitos..."
-#
-#        # Captura uma janela de logs do nftables durante o intervalo definido.
-#        # 'timeout' limita a execução do tail, 'grep' filtra linhas com "SRC=",
-#        # 'sed' extrai o IP, e 'awk' seleciona IPs com ocorrências acima do limite.
-#        suspicious_ips=$(timeout "$INTERVAL" tail -n 1000 "$LOG_FILE" 2>/dev/null | \
-#            grep "SRC=" | sed -n 's/.*SRC=\([0-9.]\+\).*/\1/p' | sort | uniq -c | \
-#            awk -v thresh="$LOG_THRESHOLD" '$1 >= thresh {print $2}')
-#
-#        for ip in $suspicious_ips; do
-#            block_ip "$ip"
-#        done
-#    else
-#        echo "Número de conexões dentro do esperado."
-#    fi
-#
-#    sleep "$INTERVAL"
-#done
 
 
 # Função: Loop principal de monitoramento
@@ -154,5 +170,6 @@ main() {
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     main
 fi
+
 
 

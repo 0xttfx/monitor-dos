@@ -1,7 +1,6 @@
-# monitor_ddos
-playing with XDP and eBPF to mitigate a DDoS attack
+# monitor-dos
 
-Esse script Bash implementa uma abordagem híbrida para detectar um ataque DDoS e opera em conjunto com o [xdp-drop-ddos]()
+Esse script Bash implementa uma abordagem híbrida para detectar um ataque DDoS e opera em conjunto com o [xdp-block-dos](https://github.com/0xttfx/xdp-block-ddos/)
 
 - Monitorando o número de conexões em /proc/net/nf_conntrack.
 - E existindo um pico suspeito, analisa os logs do nftables para identificar IPs com alta frequência.
@@ -17,7 +16,6 @@ Esse script Bash implementa uma abordagem híbrida para detectar um ataque DDoS 
         - **-i:** Intervalo de tempo (em segundos) para cada verificação.
         - **-f:** Caminho para o arquivo de log do nftables.
         - **-h:** Exibe a mensagem de ajuda.
-    - Essa abordagem torna o script flexível e adaptável a diferentes ambientes.
 
 2. **Pinagem Automática do Mapa:**
 
@@ -49,4 +47,3 @@ Esse script Bash implementa uma abordagem híbrida para detectar um ataque DDoS 
     - Verifique se os caminhos configurados (para o mapa e o log) estão corretos e se os módulos necessários (como nf_conntrack) estão carregados.
     - Teste a porra toda né! Sou péssimo programador!
     - O script deve ser executado com privilégios para acessar `/proc`, os logs e atualizar o mapa eBPF.
-
