@@ -31,6 +31,30 @@ Esse script implementa uma abordagem híbrida para detectar um ataque DDoS e ope
 ## Detalhes técnicos
 
 
+### Considrações e Limitações
+- Rastreamento de Conexões:
+	
+  - **Real time**
+
+  O `nf_conntrack` é atualizado dinamicamente pelo kernel, oferecendo um “instantâneo” do estado atual das conexões, possibilitando a detecção rápida de mudanças no tráfego.  
+  - **Stateful**
+
+  O `nf_conntrack` dá uma visão de conexões `stateful` ativas e seus estados (NEW, ESTABLISHED, RELATED e FIN_WAIT…). Cada linha em   `/proc/net/nf_conntrack` representa uma entrada que pode conter informações detalhadas, como endereços IP de origem/destino, portas, protocolos e o estado da conexão. Comprometendo a detecção de protocolos stateless... 
+   - **Tabela conntrack**
+
+  Tem tamanho limitado e, em condições normais, é dimensionada para o tráfego esperado. Mas em ataques volumétricos, o número de conexões satura a tabela, impedindo que novas conexões sejam registradas. Isso não só prejudica a detecção como pode impactar a disponibilidade do serviço, mesmo para tráfego legítimo.
+  - **Falsos Positivos**
+
+  Em ambientes com tráfego elevado – por exemplo, servidores com muitos clientes reais ou aplicações que abrem múltiplas conexões simultâneas – um pico pode ocorrer de forma legítima. Sem uma correlação com outros indicadores (como análise de logs ou métricas de latência), o sistema pode interpretar um aumento repentino de conexões como um ataque. 
+  - **Complementaridade**
+
+  Para uma detecção mais robusta, é recomendável combinar a análise de diversas fontes de dados. 
+  - **Latência na Atualização**
+
+  O método de contagem, que usa wc -l para contar linhas, pode não refletir exatamente a taxa de chegada de novas conexões, especialmente em sistemas de alta performance, onde as entradas podem ser criadas e removidas em milissegundos.
+
+
+
 ### 1. Inicialização de Variáveis e Processamento de Opções
 
 - **Definição de Valores Padrão:**  
